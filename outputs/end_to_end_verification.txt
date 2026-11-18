@@ -1,0 +1,67 @@
+================================================================================
+                 PATHSNAP END-TO-END VERIFICATION SUITE                 
+================================================================================
+
+--- [SUITE 1: Data Ingestion & Geographic Geometry] ---
+[✓] 1.1 File Ingestion (.track, .nodes, .arcs, .route)      -> PASS 
+[✓] 1.2 Local Metric Projection & Round-trip Inversion      -> PASS Delta < 1e-7 deg
+[✓] 1.3 Temporal Gap & Speed Anomaly Detection              -> PASS Mean dt=1.00s, Gaps>2s=0
+
+--- [SUITE 2: Spatial Indexing & Candidate Retrieval] ---
+[✓] 2.1 2D Spatial Grid Indexing (40m search disk)          -> PASS Found 4 candidates for ping 0
+[✓] 2.2 Orthogonal Point-to-Segment Math & Projection Ratio -> PASS dist=3.0m, t=0.5
+
+--- [SUITE 3: Feature Extraction & Ground-Truth Alignment] ---
+[✓] 3.1 Ground-Truth Moving Window Trajectory Alignment     -> PASS Aligned 2503 observations
+[✓] 3.2 13-Feature Extraction (No NaNs/Infs, valid dims)    -> PASS Shape: (9481, 13)
+[✓] 3.3 Candidate Miss Rate Benchmark (< 5%)                -> PASS Miss rate: 0.20%
+
+--- [SUITE 4: Tuned Machine Learning Model Artifacts] ---
+[✓] 4.1 Model & Scaler Artifact Existence                   -> PASS 
+[✓] 4.2 Tuned LightGBM Probability Inference                -> PASS Sample mean prob=0.1759
+
+--- [SUITE 5: HMM Viterbi Sequence Reconstruction] ---
+[✓] 5.1 Viterbi Decoding Runtime (< 3.0s)                   -> PASS Latency: 0.45s
+[✓] 5.2 Reconstructed Route Continuity (>= 98.0%)           -> PASS Continuity: 99.48%
+[✓] 5.3 Reference Arc-set F1 (>= 90.0%)                     -> PASS Arc-set F1: 93.40%
+
+--- [SUITE 6: Partition Grouping & Metric Integrity] ---
+[✓] 6.1 Whole-Partition Observation Grouping by (trip_id, obs_id) -> PASS Evaluated distinct obs: 2
+
+--- [SUITE 7: FastAPI Endpoints & Dynamic Map Generation] ---
+[✓] 7.1 GET /health (Health & Status Check)                 -> PASS Status: 200
+[✓] 7.2 GET / (Interactive Web UI Delivery)                 -> PASS Status: 200
+Saved enhanced interactive Folium map to C:\Users\SIMRAN JOSHI\Downloads\Student folder (1)\Student folder\outputs\public_maps\dynamic_map_00000000_f5e46120b9124c1390fb9d4655ed6990.html
+[✓] 7.3 POST /predict/trip/{trip_id} (Dynamic Prediction & Map URL) -> PASS Cont=99.06% | Seq-F1=93.4%
+[✓] 7.4 Dynamic Folium Map Generation (Zero Watermarks, OSM default) -> PASS 
+Saved enhanced interactive Folium map to C:\Users\SIMRAN JOSHI\Downloads\Student folder (1)\Student folder\outputs\public_maps\dynamic_map_raw_60fb3fc0695e44f08376e7f2729777a7.html
+[✓] 7.5 POST /predict/raw (Arbitrary JSON Trajectory Ingestion) -> PASS Arcs: 5
+[✓] 7.6 404 Error Guard for Unregistered Trips              -> PASS HTTP 404 caught cleanly
+
+================================================================================
+                           VERIFICATION SUMMARY                         
+================================================================================
+  PASS   | 1.1 File Ingestion (.track, .nodes, .arcs, .route)      | 
+  PASS   | 1.2 Local Metric Projection & Round-trip Inversion      | Delta < 1e-7 deg
+  PASS   | 1.3 Temporal Gap & Speed Anomaly Detection              | Mean dt=1.00s, Gaps>2s=0
+  PASS   | 2.1 2D Spatial Grid Indexing (40m search disk)          | Found 4 candidates for ping 0
+  PASS   | 2.2 Orthogonal Point-to-Segment Math & Projection Ratio | dist=3.0m, t=0.5
+  PASS   | 3.1 Ground-Truth Moving Window Trajectory Alignment     | Aligned 2503 observations
+  PASS   | 3.2 13-Feature Extraction (No NaNs/Infs, valid dims)    | Shape: (9481, 13)
+  PASS   | 3.3 Candidate Miss Rate Benchmark (< 5%)                | Miss rate: 0.20%
+  PASS   | 4.1 Model & Scaler Artifact Existence                   | 
+  PASS   | 4.2 Tuned LightGBM Probability Inference                | Sample mean prob=0.1759
+  PASS   | 5.1 Viterbi Decoding Runtime (< 3.0s)                   | Latency: 0.45s
+  PASS   | 5.2 Reconstructed Route Continuity (>= 98.0%)           | Continuity: 99.48%
+  PASS   | 5.3 Reference Arc-set F1 (>= 90.0%)                     | Arc-set F1: 93.40%
+  PASS   | 6.1 Whole-Partition Observation Grouping by (trip_id, obs_id) | Evaluated distinct obs: 2
+  PASS   | 7.1 GET /health (Health & Status Check)                 | Status: 200
+  PASS   | 7.2 GET / (Interactive Web UI Delivery)                 | Status: 200
+  PASS   | 7.3 POST /predict/trip/{trip_id} (Dynamic Prediction & Map URL) | Cont=99.06% | Seq-F1=93.4%
+  PASS   | 7.4 Dynamic Folium Map Generation (Zero Watermarks, OSM default) | 
+  PASS   | 7.5 POST /predict/raw (Arbitrary JSON Trajectory Ingestion) | Arcs: 5
+  PASS   | 7.6 404 Error Guard for Unregistered Trips              | HTTP 404 caught cleanly
+--------------------------------------------------------------------------------
+TOTAL TESTS: 20  |  PASSED: 20  |  FAILED: 0
+CHECK RESULT: ALL CHECKS PASSED
+================================================================================

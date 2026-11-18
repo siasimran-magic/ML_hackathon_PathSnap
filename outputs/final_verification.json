@@ -1,0 +1,21 @@
+{
+  "status": "passed",
+  "model_sha256": "53e42147454f665774f88e31ee2ac82e8091212e7798fb27cb20a3a2ef902375",
+  "benchmark_models": 5,
+  "grouped_cv_folds": 15,
+  "tuning_trials": 15,
+  "evaluator_routes_verified": 10,
+  "regression_checks": 8,
+  "end_to_end_checks": 20,
+  "python_files_compiled": 19,
+  "student_classifier_continuity": 0.8984615949231383,
+  "python": "3.12.4",
+  "versions": {
+    "numpy": "1.26.4",
+    "pandas": "2.2.2",
+    "scikit-learn": "1.4.2",
+    "lightgbm": "4.6.0",
+    "optuna": "4.2.1",
+    "fastapi": "0.135.3"
+  }
+}
