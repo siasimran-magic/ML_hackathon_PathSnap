@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PathSnap — High-Precision Trajectory Map-Matching & Route Reconstruction</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        .gradient-bg {
+            background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+        }
+        .card-glass {
+            background: rgba(30, 41, 59, 0.7);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+    </style>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col font-sans antialiased">
+    <!-- Navbar -->
+    <header class="border-b border-slate-800 bg-slate-900/80 backdrop-blur sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+            <div class="flex items-center space-x-3">
+                <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-cyan-500 to-emerald-500 flex items-center justify-center shadow-lg shadow-cyan-500/20">
+                    <i class="fa-solid fa-route text-white text-lg"></i>
+                </div>
+                <div>
+                    <h1 class="font-bold text-xl tracking-tight bg-gradient-to-r from-cyan-400 via-teal-300 to-emerald-400 bg-clip-text text-transparent">
+                        PathSnap
+                    </h1>
+                    <p class="text-xs text-slate-400">ML + HMM Trajectory Route Reconstruction</p>
+                </div>
+            </div>
+            <div class="flex items-center space-x-4">
+                <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                    <span class="w-2 h-2 mr-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                    LightGBM + Viterbi Online
+                </span>
+                <a href="/docs" target="_blank" class="text-xs px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition border border-slate-700 flex items-center space-x-1.5">
+                    <i class="fa-solid fa-code"></i>
+                    <span>Swagger API</span>
+                </a>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Container -->
+    <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+        <!-- Navigation Tabs -->
+        <div class="flex border-b border-slate-800 space-x-2">
+            <button onclick="switchTab('reconstruction')" id="tab-reconstruction" class="tab-btn px-4 py-2.5 font-medium text-sm border-b-2 border-cyan-500 text-cyan-400 flex items-center space-x-2 transition">
+                <i class="fa-solid fa-map-location-dot"></i>
+                <span>Live Route Reconstruction</span>
+            </button>
+            <button onclick="switchTab('benchmarks')" id="tab-benchmarks" class="tab-btn px-4 py-2.5 font-medium text-sm border-b-2 border-transparent text-slate-400 hover:text-slate-200 flex items-center space-x-2 transition">
+                <i class="fa-solid fa-chart-line"></i>
+                <span>5-Model Benchmarks</span>
+            </button>
+            <button onclick="switchTab('tuning')" id="tab-tuning" class="tab-btn px-4 py-2.5 font-medium text-sm border-b-2 border-transparent text-slate-400 hover:text-slate-200 flex items-center space-x-2 transition">
+                <i class="fa-solid fa-sliders"></i>
+                <span>Bayesian Tuning</span>
+            </button>
+        </div>
+
+        <!-- TAB 1: Route Reconstruction -->
+        <section id="panel-reconstruction" class="space-y-6">
+            <!-- Controls Card -->
+            <div class="card-glass rounded-2xl p-5 shadow-xl">
+                <div class="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
+                    <div>
+                        <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1.5">
+                            Select Trip
+                        </label>
+                        <select id="trip-select" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-2 text-sm text-slate-200 focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 transition">
+                            <option value="00000000">Loading available trips...</option>
+                        </select>
+                    </div>
+
+                    <div>
+                        <div class="flex justify-between items-center mb-1.5">
+                            <label class="text-xs font-semibold uppercase tracking-wider text-slate-400">GPS Noise (&sigma;<sub>z</sub>)</label>
+                            <span id="sigma-val" class="text-xs font-mono text-cyan-400">4.07 m</span>
+                        </div>
+                        <input type="range" id="sigma-slider" min="1.0" max="15.0" step="0.01" value="4.07" class="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-cyan-500" oninput="document.getElementById('sigma-val').innerText = this.value + ' m'">
+                    </div>
+
+                    <div>
+                        <div class="flex justify-between items-center mb-1.5">
+                            <label class="text-xs font-semibold uppercase tracking-wider text-slate-400">ML Weight (&alpha;<sub>ML</sub>)</label>
+                            <span id="alpha-val" class="text-xs font-mono text-emerald-400">0.70</span>
+                        </div>
+                        <input type="range" id="alpha-slider" min="0.1" max="0.95" step="0.05" value="0.70" class="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-emerald-500" oninput="document.getElementById('alpha-val').innerText = this.value">
+                    </div>
+
+                    <div>
+                        <button onclick="reconstructRoute()" id="btn-reconstruct" class="w-full bg-gradient-to-r from-cyan-500 to-emerald-500 hover:from-cyan-400 hover:to-emerald-400 text-slate-950 font-bold py-2.5 px-4 rounded-xl shadow-lg shadow-cyan-500/20 hover:shadow-cyan-500/30 transition flex items-center justify-center space-x-2">
+                            <i class="fa-solid fa-play"></i>
+                            <span>Reconstruct Route</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Real-Time Metrics Bar -->
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div class="card-glass rounded-2xl p-4 border-l-4 border-emerald-400 shadow">
+                    <p class="text-xs font-semibold uppercase tracking-wider text-slate-400">Route Continuity</p>
+                    <div class="flex items-baseline space-x-2 mt-1">
+                        <span id="metric-continuity" class="text-2xl font-bold text-emerald-400">--%</span>
+                        <span id="badge-continuity" class="text-xs px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-mono">Live HMM</span>
+                    </div>
+                    <p class="text-xs text-slate-400 mt-1">Continuous road transitions</p>
+                </div>
+
+                <div class="card-glass rounded-2xl p-4 border-l-4 border-cyan-400 shadow">
+                    <p class="text-xs font-semibold uppercase tracking-wider text-slate-400">Arc-set F1</p>
+                    <div class="flex items-baseline space-x-2 mt-1">
+                        <span id="metric-seq-f1" class="text-2xl font-bold text-cyan-400">--%</span>
+                        <span id="badge-seq-f1" class="text-xs px-1.5 py-0.5 rounded bg-cyan-500/20 text-cyan-300 font-mono">Arc-set F1</span>
+                    </div>
+                    <p class="text-xs text-slate-400 mt-1">Arc overlap; ignores traversal order</p>
+                </div>
+
+                <div class="card-glass rounded-2xl p-4 border-l-4 border-amber-400 shadow">
+                    <p class="text-xs font-semibold uppercase tracking-wider text-slate-400">Reconstructed Arcs</p>
+                    <div class="flex items-baseline space-x-2 mt-1">
+                        <span id="metric-arcs" class="text-2xl font-bold text-amber-400">--</span>
+                        <span class="text-xs text-slate-400 font-mono">road segments</span>
+                    </div>
+                    <p class="text-xs text-slate-400 mt-1">Sequential path segment count</p>
+                </div>
+
+                <div class="card-glass rounded-2xl p-4 border-l-4 border-purple-400 shadow">
+                    <p class="text-xs font-semibold uppercase tracking-wider text-slate-400">Processing Latency</p>
+                    <div class="flex items-baseline space-x-2 mt-1">
+                        <span id="metric-latency" class="text-2xl font-bold text-purple-400">-- s</span>
+                        <span class="text-xs text-slate-400 font-mono">end-to-end</span>
+                    </div>
+                    <p class="text-xs text-slate-400 mt-1">Spatial index + ML + Viterbi</p>
+                </div>
+            </div>
+
+            <!-- Interactive Map Container -->
+            <div class="card-glass rounded-2xl overflow-hidden shadow-2xl border border-slate-800">
+                <div class="px-5 py-3.5 bg-slate-900/90 border-b border-slate-800 flex items-center justify-between">
+                    <div class="flex items-center space-x-3">
+                        <i class="fa-solid fa-layer-group text-cyan-400"></i>
+                        <span class="font-semibold text-sm text-slate-200">Reconstructed Route Produced by Current Request</span>
+                        <span id="live-indicator" class="hidden text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 font-mono animate-pulse">LIVE RECONSTRUCTED</span>
+                    </div>
+                    <div class="flex items-center space-x-4 text-xs">
+                        <span class="flex items-center space-x-1.5"><span class="w-3 h-3 rounded-full bg-cyan-400 inline-block"></span><span class="text-slate-300">GPS Pings</span></span>
+                        <span class="flex items-center space-x-1.5"><span class="w-3 h-1.5 bg-emerald-400 inline-block"></span><span class="text-slate-300 font-bold">Predicted Route (Current Request)</span></span>
+                        <span class="flex items-center space-x-1.5"><span class="w-3 h-1 bg-amber-400 inline-block"></span><span class="text-slate-400">Prediction only; no reference geometry</span></span>
+                    </div>
+                </div>
+                <div class="relative w-full h-[620px] bg-slate-900">
+                    <iframe id="map-frame" src="about:blank" class="w-full h-full border-0"></iframe>
+                    <div id="map-loader" class="absolute inset-0 bg-slate-950/70 backdrop-blur-sm flex flex-col items-center justify-center space-y-3 hidden">
+                        <i class="fa-solid fa-circle-notch fa-spin text-4xl text-cyan-400"></i>
+                        <span class="text-sm font-medium text-slate-200">Running Spatial Indexing + LightGBM + Viterbi Decoder...</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Current Request Reconstructed Route Inspection Drawer -->
+            <div id="reconstructed-arcs-container" class="card-glass rounded-2xl p-5 shadow-xl space-y-3">
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center space-x-2">
+                        <i class="fa-solid fa-code-branch text-emerald-400"></i>
+                        <h3 class="font-bold text-sm text-slate-200">Current Request Reconstructed Route Inspection</h3>
+                    </div>
+                    <span id="current-request-status" class="text-xs px-2.5 py-1 rounded-full bg-slate-800 text-slate-300 border border-slate-700 font-mono">
+                        Ready
+                    </span>
+                </div>
+                <p class="text-xs text-slate-400">
+                    Ordered topological sequence of road arc IDs traversed by the vehicle, reconstructed dynamically by the current request:
+                </p>
+                <div class="bg-slate-900 rounded-xl p-3 border border-slate-800 max-h-36 overflow-y-auto font-mono text-xs text-emerald-400 leading-relaxed select-all" id="reconstructed-arcs-list">
+                    Click "Reconstruct Route" to execute inference and inspect the reconstructed arc sequence.
+                </div>
+            </div>
+        </section>
+
+        <!-- TAB 2: Model Benchmarks -->
+        <section id="panel-benchmarks" class="space-y-6 hidden">
+            <div class="card-glass rounded-2xl p-6 shadow-xl space-y-6">
+                <div>
+                    <h2 class="text-lg font-bold text-slate-100">5-Model Experimental Benchmark Results</h2>
+                    <p class="text-sm text-slate-400">Comparing 5 algorithm families on 1,077,180 training rows and 106,904 student test instances.</p>
+                </div>
+
+                <!-- Benchmarks Image Gallery -->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div class="bg-slate-900 rounded-xl p-3 border border-slate-800">
+                        <p class="text-xs font-bold text-slate-300 mb-2">Metric Comparison Across 5 Models</p>
+                        <img src="/figures/metric_comparison_5_models.png" alt="Metric Comparison" class="w-full rounded-lg shadow">
+                    </div>
+                    <div class="bg-slate-900 rounded-xl p-3 border border-slate-800">
+                        <p class="text-xs font-bold text-slate-300 mb-2">Route Continuity: Classifier vs. HMM</p>
+                        <img src="/figures/route_continuity_classifier_vs_hmm.png" alt="Continuity Comparison" class="w-full rounded-lg shadow">
+                    </div>
+                    <div class="bg-slate-900 rounded-xl p-3 border border-slate-800">
+                        <p class="text-xs font-bold text-slate-300 mb-2">ROC & Precision-Recall Curves</p>
+                        <img src="/figures/roc_and_pr_curves_all_models.png" alt="ROC PR Curves" class="w-full rounded-lg shadow">
+                    </div>
+                    <div class="bg-slate-900 rounded-xl p-3 border border-slate-800">
+                        <p class="text-xs font-bold text-slate-300 mb-2">Computational Latency & Speed</p>
+                        <img src="/figures/timing_and_speed_comparison.png" alt="Timing Comparison" class="w-full rounded-lg shadow">
+                    </div>
+                </div>
+
+                <div class="bg-slate-900 rounded-xl p-3 border border-slate-800">
+                    <p class="text-xs font-bold text-slate-300 mb-2">Confusion Matrices Across All 5 Algorithms</p>
+                    <img src="/figures/confusion_matrices_all_models.png" alt="Confusion Matrices" class="w-full rounded-lg shadow">
+                </div>
+            </div>
+        </section>
+
+        <!-- TAB 3: Bayesian Tuning -->
+        <section id="panel-tuning" class="space-y-6 hidden">
+            <div class="card-glass rounded-2xl p-6 shadow-xl space-y-6">
+                <div>
+                    <h2 class="text-lg font-bold text-slate-100">Optuna Bayesian Hyperparameter Optimization</h2>
+                    <p class="text-sm text-slate-400">Tree-structured Parzen Estimator (TPE) guided search with 3-fold GroupKFold cross-validation.</p>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div class="bg-slate-900/80 rounded-xl p-5 border border-slate-800">
+                        <h3 class="font-semibold text-sm text-cyan-400 mb-3">Optimal Discovered Hyperparameters</h3>
+                        <div id="best-params" class="space-y-2 text-xs font-mono">Loading saved parameters...</div>
+                    </div>
+
+                    <div class="bg-slate-900/80 rounded-xl p-5 border border-slate-800">
+                        <h3 class="font-semibold text-sm text-emerald-400 mb-3">Empirical Tuning Uplift</h3>
+                        <table class="w-full text-xs text-left">
+                            <thead class="text-slate-400 border-b border-slate-800">
+                                <tr>
+                                    <th class="py-2">Metric</th>
+                                    <th class="py-2">Untuned</th>
+                                    <th class="py-2">Tuned</th>
+                                    <th class="py-2 text-right">Delta (&Delta;)</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tuning-results" class="divide-y divide-slate-800 text-slate-200"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- Footer -->
+    <footer class="border-t border-slate-800 bg-slate-900/60 py-4 text-center text-xs text-slate-500">
+        PathSnap Route Reconstruction Engine &copy; 2026. Built with FastAPI, LightGBM, and Viterbi HMM.
+    </footer>
+
+    <!-- JavaScript Logic -->
+    <script>
+        function switchTab(tab) {
+            document.querySelectorAll('.tab-btn').forEach(b => {
+                b.classList.remove('border-cyan-500', 'text-cyan-400');
+                b.classList.add('border-transparent', 'text-slate-400');
+            });
+            ['reconstruction', 'benchmarks', 'tuning'].forEach(t => {
+                document.getElementById('panel-' + t).classList.add('hidden');
+            });
+
+            document.getElementById('tab-' + tab).classList.add('border-cyan-500', 'text-cyan-400');
+            document.getElementById('tab-' + tab).classList.remove('border-transparent', 'text-slate-400');
+            document.getElementById('panel-' + tab).classList.remove('hidden');
+        }
+
+        async function reconstructRoute() {
+            const tripId = document.getElementById('trip-select').value;
+            const sigma = parseFloat(document.getElementById('sigma-slider').value);
+            const alpha = parseFloat(document.getElementById('alpha-slider').value);
+            const loader = document.getElementById('map-loader');
+            const btn = document.getElementById('btn-reconstruct');
+            const liveBadge = document.getElementById('live-indicator');
+            
+            loader.classList.remove('hidden');
+            btn.disabled = true;
+
+            try {
+                // Call real-time backend endpoint with dynamic user parameters
+                const url = `/predict/trip/${tripId}?sigma_z=${sigma}&alpha_ml=${alpha}`;
+                const res = await fetch(url, { method: 'POST' });
+                if (!res.ok) {
+                    throw new Error(`Inference error: HTTP ${res.status}`);
+                }
+                const data = await res.json();
+
+                // 1. Update Route Continuity
+                if (data.route_continuity_pct !== undefined && data.route_continuity_pct !== null) {
+                    document.getElementById('metric-continuity').innerText = data.route_continuity_pct.toFixed(2) + "%";
+                    document.getElementById('badge-continuity').innerText = "Live Topological";
+                }
+
+                // 2. Update Arc-set F1 (Arc-set F1 vs Ground Truth)
+                const f1El = document.getElementById('metric-seq-f1');
+                const badgeEl = document.getElementById('badge-seq-f1');
+                if (data.has_ground_truth && data.arc_set_f1_pct !== null && data.arc_set_f1_pct !== undefined) {
+                    f1El.innerText = data.arc_set_f1_pct.toFixed(2) + "%";
+                    badgeEl.innerText = `P: ${data.sequence_precision_pct.toFixed(1)}% | R: ${data.sequence_recall_pct.toFixed(1)}%`;
+                    badgeEl.className = "text-xs px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-mono";
+                } else {
+                    f1El.innerText = "Blind (N/A)";
+                    badgeEl.innerText = "Evaluator Mode (Ground truth hidden)";
+                    badgeEl.className = "text-xs px-1.5 py-0.5 rounded bg-slate-800 text-slate-400 font-mono";
+                }
+
+                // 3. Update Reconstructed Arcs count
+                document.getElementById('metric-arcs').innerText = data.num_reconstructed_arcs;
+
+                // 4. Update Processing Latency
+                document.getElementById('metric-latency').innerText = data.processing_time_sec.toFixed(2) + " s";
+
+                // 5. Update Map frame with the freshly generated dynamic map URL
+                if (data.map_url) {
+                    document.getElementById('map-frame').src = data.map_url;
+                }
+
+                // 6. Update Reconstructed Route Arcs Inspection Drawer
+                const arcList = document.getElementById('reconstructed-arcs-list');
+                const statusBadge = document.getElementById('current-request-status');
+                if (data.reconstructed_route && data.reconstructed_route.length > 0) {
+                    arcList.innerText = data.reconstructed_route.join("  →  ");
+                    statusBadge.innerText = `${data.status === "partial" ? "PARTIAL | " : ""}Trip ${data.trip_id} | ${data.num_reconstructed_arcs} arcs | ${data.disconnected_transition_count} network gaps | sigma=${sigma}m | ML=${alpha}`;
+                    statusBadge.className = "text-xs px-2.5 py-1 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-mono";
+                }
+                
+                liveBadge.classList.remove('hidden');
+
+            } catch (err) {
+                console.error("Reconstruction failed:", err);
+                alert("Failed to reconstruct route: " + err.message);
+            } finally {
+                loader.classList.add('hidden');
+                btn.disabled = false;
+            }
+        }
+
+        // Auto-run reconstruction on page load
+        window.addEventListener('DOMContentLoaded', async () => {
+            try {
+                const trips = await (await fetch('/trips')).json();
+                document.getElementById('trip-select').replaceChildren(...trips.map(t => {
+                    const option = document.createElement('option');
+                    option.value = t.trip_id;
+                    option.textContent = `Trip ${t.trip_id} (${t.split === 'evaluator_test' ? 'Evaluator - blind' : 'Student test'})`;
+                    return option;
+                }));
+                const results = await (await fetch('/results')).json();
+                const params = document.getElementById('best-params');
+                params.replaceChildren(...Object.entries(results.best_params).map(([key, value]) => {
+                    const row = document.createElement('p'); row.textContent = `${key}: ${value}`; return row;
+                }));
+                const table = document.getElementById('tuning-results');
+                const labels = {accuracy:'Candidate accuracy', precision:'Candidate precision', f1:'Candidate F1', macro_f1:'Macro F1', top1_accuracy:'Observation top-1', log_loss:'Log loss', roc_auc:'ROC-AUC', route_continuity:'Observation continuity', seq_f1:'Arc-set F1'};
+                if (results.tuning.length === 2) {
+                    table.replaceChildren(...Object.entries(labels).map(([key, label]) => {
+                        const row = document.createElement('tr');
+                        const a = results.tuning[0][key], b = results.tuning[1][key];
+                        [label, Number(a).toFixed(4), Number(b).toFixed(4), (b-a).toFixed(4)].forEach(value => {
+                            const cell = document.createElement('td'); cell.textContent = value; cell.className='py-2'; row.append(cell);
+                        }); return row;
+                    }));
+                }
+                await reconstructRoute();
+            } catch (error) { console.error(error); }
+        });
+        
+        // Auto-reconstruct when trip selection changes
+        document.getElementById('trip-select').addEventListener('change', () => {
+            reconstructRoute();
+        });
+    </script>
+</body>
+</html>
