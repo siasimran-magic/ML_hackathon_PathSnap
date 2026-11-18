@@ -1,0 +1,17 @@
+{
+  "trips": 10,
+  "gps_points": 19674,
+  "model_sha256": "53e42147454f665774f88e31ee2ac82e8091212e7798fb27cb20a3a2ef902375",
+  "parameters": {
+    "sigma_z": 4.07,
+    "beta": 3.0,
+    "alpha_ml": 0.7
+  },
+  "mean_arc_set_f1": 0.9232612048112603,
+  "mean_raw_arc_set_f1": 0.7775640460645545,
+  "mean_observation_continuity": 0.9603085089841545,
+  "mean_full_route_continuity": 1.0,
+  "total_inference_seconds": 15.378277899988461,
+  "metric_note": "Arc-set F1 ignores traversal order and repeated arcs; it is not order-sensitive sequence accuracy.",
+  "ground_truth_used_for_inference": false
+}
